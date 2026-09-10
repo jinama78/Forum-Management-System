@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>언론사 포럼 관리 시스템 (Firebase 실시간 연동)</title>
+  
+  <!-- Firebase SDK (호환 버전 9.x) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #1e293b; padding: 24px 20px; line-height: 1.5; }
+    .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+    
+    /* Header */
+    .header { background: #ffffff; padding: 18px 24px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+    .header h1 { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+    .sync-status { font-size: 11px; font-weight: 700; color: #16a34a; background: #dcfce7; padding: 3px 8px; border-radius: 6px; border: 1px solid #bbf7d0; }
+    
+    /* Buttons */
+    .btn { padding: 8px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; box-shadow: 0 2px 6px rgba(37,99,235,0.25); }
+    .btn-outline { background: #ffffff; color: #475569; border: 1px solid #cbd5e1; }
+    .btn-outline:hover { background: #f1f5f9; color: #1e293b; }
+    .btn-sort { background: #f0fdf4; color: #166534; border: 1.5px solid #bbf7d0; font-weight: 700; }
+    .btn-sort:hover { background: #dcfce7; }
+    .btn-telegram { background: #229ED9; color: #ffffff; font-weight: 700; }
+    .btn-telegram:hover { background: #1b85b8; }
+    .btn-team { background: #6366f1; color: #ffffff; font-weight: 700; }
+    .btn-team:hover { background: #4f46e5; }
+
+    /* Action Buttons */
+    .btn-action-attended, .btn-action-volunteer, .btn-action-absent { font-weight: 700; border-width: 1px; font-size: 11px; padding: 5px 10px; }
+    .btn-action-attended { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .btn-action-attended:hover { background: #10b981; color: #ffffff; border-color: #10b981; }
+    .btn-action-volunteer { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+    .btn-action-volunteer:hover { background: #4f46e5; color: #ffffff; border-color: #4f46e5; }
+    .btn-action-absent { background: #fff1f2; color: #9f1239; border: 1px solid #fecdd3; }
+    .btn-action-absent:hover { background: #f43f5e; color: #ffffff; border-color: #f43f5e; }
+
+    /* Layout */
+    .content-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+    @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } }
+
+    .panel { background: #fff; padding: 22px; border-radius: 18px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+    .panel-title { font-size: 15px; font-weight: 800; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Filter Bar */
+    .filter-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-tabs { display: flex; gap: 4px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
+    .tab-btn { padding: 6px 16px; font-size: 12.5px; font-weight: 600; border-radius: 8px; border: none; background: transparent; cursor: pointer; color: #64748b; }
+    .tab-btn.active { background: #fff; color: #2563eb; font-weight: 800; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .search-input { padding: 7px 12px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; width: 160px; }
+
+    /* Forum Card */
+    .forum-list { display: flex; flex-direction: column; gap: 14px; }
+    .forum-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+    .forum-card.completed { background: #f8fafc; border-color: #e2e8f0; }
+    .forum-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+    .forum-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .tag { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+    .tag-date { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
+    .tag-company { background: #f1f5f9; color: #334155; font-weight: 800; }
+    
+    .tag-status-attended { background: #ecfdf5; color: #047857; font-weight: 800; border: 1px solid #a7f3d0; }
+    .tag-status-volunteer { background: #eef2ff; color: #4338ca; font-weight: 800; border: 1px solid #c7d2fe; }
+    .tag-status-absent { background: #fff1f2; color: #be123c; font-weight: 800; border: 1px solid #fecdd3; }
+
+    .forum-title { font-size: 15.5px; font-weight: 800; color: #0f172a; margin: 8px 0 2px 0; letter-spacing: -0.01em; }
+    .forum-topic-text { font-size: 13.5px; font-weight: 400; color: #475569; margin: 2px 0 6px 0; line-height: 1.4; }
+    .forum-meta { font-size: 12px; color: #64748b; display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+
+    .attendee-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0; margin-top: 8px; flex-wrap: wrap; gap: 8px; }
+    .attendee-name { font-weight: 800; font-size: 13.5px; color: #1e293b; display: flex; align-items: center; gap: 6px; }
+    .forum-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid #f1f5f9; flex-wrap: wrap; gap: 8px; }
+    .btn-change-user { background: #f8fafc; color: #2563eb; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #bfdbfe; cursor: pointer; transition: all 0.2s; }
+    .btn-change-user:hover { background: #eff6ff; }
+    .action-group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+    /* Member List (Ranking) */
+    .member-list { display: flex; flex-direction: column; gap: 8px; }
+    .member-item { padding: 10px 14px; border-radius: 12px; border: 1px solid #f1f5f9; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .member-item.priority { background: #fefce8; border-color: #fde047; }
+    .member-name { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .badge-rank { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #e2e8f0; font-size: 11px; font-weight: 800; align-items: center; justify-content: center; }
+    .badge-rank.top { background: #f59e0b; color: #fff; }
+    .badge-pending { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
+    .badge-pending.has-pending { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+
+    /* Text Parser Box */
+    .parser-box { background: #ffffff; border: 2px solid #3b82f6; border-radius: 18px; padding: 22px; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08); }
+    .parser-title { font-size: 16px; font-weight: 800; color: #1e3a8a; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+    .parser-textarea { width: 100%; height: 95px; padding: 12px 14px; border: 1.5px solid #cbd5e1; border-radius: 12px; font-size: 13px; font-family: monospace; resize: vertical; outline: none; background: #f8fafc; }
+    .parser-textarea:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+    
+    .preview-box { background: #f8fafc; border: 1.5px dashed #93c5fd; border-radius: 12px; padding: 14px 16px; margin-top: 12px; font-size: 13px; }
+    .preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; color: #1e40af; margin-top: 6px; }
+    .preview-grid span { font-weight: 700; color: #0f172a; }
+
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal-box { background: #fff; width: 100%; max-width: 500px; border-radius: 20px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; max-height: 90vh; overflow-y: auto;}
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; }
+    .modal-header h3 { font-size: 16px; font-weight: 800; color: #0f172a; }
+    
+    .member-select-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; max-height: 240px; overflow-y: auto; padding: 2px; }
+    .member-chip { padding: 8px 10px; border-radius: 10px; border: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #334155; text-align: center; cursor: pointer; transition: all 0.15s; user-select: none; }
+    .member-chip:hover { border-color: #93c5fd; background: #eff6ff; }
+    .member-chip.selected { background: #eff6ff; border-color: #2563eb; color: #1e40af; font-weight: 800; }
+    
+    .modal-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 14px; }
+
+    /* Edit Form */
+    .edit-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group.full { grid-column: span 2; }
+    .form-group label { font-size: 11.5px; font-weight: 700; color: #475569; }
+    .form-group input { padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; }
+    .form-group input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div>
+        <h1>🏛️ 언론사 포럼 관리 시스템 <span class="sync-status" id="syncStatus">🟢 실시간 동기화 연결 중...</span></h1>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-telegram" onclick="copyTelegramSchedule()">✈️ 텔레그램 일정 복사</button>
+        <button class="btn btn-team" onclick="openTeamModal()">👥 팀원 변경</button>
+        <button class="btn btn-outline" onclick="resetData()">🔄 데이터 초기화</button>
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <div class="content-grid">
+      <!-- Left: Forums -->
+      <div class="panel">
+        <div class="filter-bar">
+          <div class="filter-tabs">
+            <button class="tab-btn active" onclick="setFilter('pending', this)">📌 예정 포럼</button>
+            <button class="tab-btn" onclick="setFilter('all', this)">전체 내역</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-sort" id="btnSortDate" style="padding: 6px 10px; font-size: 12px;" onclick="sortForumsByDate()">
+              📅 날짜 빠른순 정렬 ↑
+            </button>
+            <input type="text" id="searchInput" class="search-input" placeholder="검색..." oninput="renderForums()">
+          </div>
+        </div>
+
+        <div class="forum-list" id="forumListContainer"></div>
+      </div>
+
+      <!-- Right: Member Rankings -->
+      <div class="panel">
+        <div class="panel-title">
+          <span>👥 팀원별 배정 순위</span>
+          <span style="font-size: 11px; background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-weight: 700;">환산점수 낮은순</span>
+        </div>
+        <div class="member-list" id="memberListContainer"></div>
+      </div>
+    </div>
+
+    <!-- Bottom: Parser Box -->
+    <div class="parser-box">
+      <div class="parser-title">
+        <span>✨ 텍스트 붙여넣기 자동 인식 등록</span>
+        <span style="font-size: 12px; font-weight: 500; color: #475569;">■ 날짜 / [언론사] 행사명 / 주제 / 시간 / 장소 자동 분석</span>
+      </div>
+
+      <textarea id="forumRawText" class="parser-textarea" placeholder="여기에 포럼 안내 텍스트를 붙여넣으세요..." oninput="handleTextPreview()">■ 9.2(수)
+ - [스카이데일리] 창간 15주년 기념식 AI-AX 혁신포럼
+    AX 현재와 미래
+    14:00 / 프레스센터 20층 국제회의장</textarea>
+
+      <!-- Realtime Preview -->
+      <div class="preview-box">
+        <div style="font-weight: 800; color: #1e40af; margin-bottom: 4px;">🔍 실시간 자동 분석 결과 미리보기</div>
+        <div class="preview-grid">
+          <div>📅 일자: <span id="pvDate">9.2(수)</span></div>
+          <div>⏰ 시간: <span id="pvTime">14:00</span></div>
+          <div>🏢 언론사: <span id="pvCompany">스카이데일리</span></div>
+          <div>📍 장소: <span id="pvLocation">프레스센터 20층 국제회의장</span></div>
+        </div>
+        <div style="margin-top: 6px; color: #0f172a; font-weight: 700;">
+          📌 행사명: <span id="pvTitle">창간 15주년 기념식 AI-AX 혁신포럼</span>
+        </div>
+        <div style="margin-top: 4px; color: #475569;">
+          💬 주제: <span id="pvTopic" style="font-weight: 600; color: #0369a1;">AX 현재와 미래</span>
+        </div>
+        <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <div style="color: #b45309; font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            <span>👉 배정 예정 참석자:</span>
+            <span id="pvAttendeeList" style="display: inline-flex; gap: 4px;"></span>
+          </div>
+          <button type="button" class="btn-change-user" onclick="openNewForumAttendeeModal()">
+            👥 참석자 직접 선택/변경 (최대 3명)
+          </button>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+        <button type="button" class="btn btn-primary" style="padding: 10px 22px; font-size: 14px; font-weight: 800;" onclick="saveParsedForum()">
+          ⚡ 위 내용으로 포럼 즉시 등록하기
+        </button>
+      </div>  
+    </div>
+  </div>
+
+  <!-- 👥 팀원 관리 모달 -->
+  <div class="modal-overlay" id="teamModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>👥 팀원 추가 / 삭제 관리</h3>
+        <button type="button" onclick="closeTeamModal()" style="border:none; background:none; font-size:18px; cursor:pointer; color:#94a3b8;">✕</button>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <input type="text" id="newMemberName" placeholder="새로운 팀원 이름 입력" style="flex:1; padding:10px 12px; font-size:13px; border:1px solid #cbd5e1; border-radius:8px; outline:none;">
+        <button class="btn btn-primary" onclick="addTeamMember()">➕ 추가</button>
+      </div>
+      <div style="max-height: 250px; overflow-y: auto; border: 1px solid #f1f5f9; border-radius: 8px;">
+        <ul id="teamManageList" style="list-style: none;"></ul>
+      </div>
+      <div class="modal-footer" style="margin-top: 16px; border-top:none;">
+        <div></div>
+        <button type="button" class="btn btn-outline" onclick="closeTeamModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 👥 참석자 배정 모달 -->
+  <div class="modal-overlay" id="attendeeModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalTitle">👥 참석자 배정 (최대 3명)</h3>
+        <button type="button" onclick="closeAttendeeModal()" style="border:none; background:none; font-size:18px; cursor:pointer; color:#94a3b8;">✕</button>
+      </div>
+      <div style="font-size: 12px; color: #64748b; margin-bottom: 12px;">
+        클릭하여 참석자를 선택하거나 해제하세요. <span style="color:#2563eb; font-weight:700;">(최대 3명)</span>
+      </div>
+      <div class="member-select-grid" id="memberSelectGrid"></div>
+      <div class="modal-footer">
+        <div style="font-size: 12px; font-weight: 700; color: #334155;">
+          선택된 인원: <span id="modalSelectedCount" style="color:#2563eb; font-size:14px;">0</span> / 3명
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-outline" onclick="closeAttendeeModal()">취소</button>
+          <button type="button" class="btn btn-primary" onclick="saveAttendeeSelection()">✓ 저장하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✏️ 포럼 정보 수정 모달 -->
+  <div class="modal-overlay" id="editForumModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>✏️ 포럼 정보 수기 수정</h3>
+        <button type="button" onclick="closeEditModal()" style="border:none; background:none; font-size:18px; cursor:pointer; color:#94a3b8;">✕</button>
+      </div>
+      
+      <div class="edit-form-grid">
+        <div class="form-group">
+          <label>일자 (예: 9.2(수))</label>
+          <input type="text" id="editDate">
+        </div>
+        <div class="form-group">
+          <label>시간 (예: 14:00)</label>
+          <input type="text" id="editTime">
+        </div>
+        <div class="form-group">
+          <label>언론사 (매체명)</label>
+          <input type="text" id="editCompany">
+        </div>
+        <div class="form-group">
+          <label>비고/메모</label>
+          <input type="text" id="editNote" placeholder="예: 조찬, VIP 티타임 등">
+        </div>
+        <div class="form-group full">
+          <label>포럼 행사명</label>
+          <input type="text" id="editTitle">
+        </div>
+        <div class="form-group full">
+          <label>포럼 주제</label>
+          <input type="text" id="editTopic">
+        </div>
+        <div class="form-group full">
+          <label>장소</label>
+          <input type="text" id="editLocation">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div></div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-outline" onclick="closeEditModal()">취소</button>
+          <button type="button" class="btn btn-primary" onclick="saveForumEdit()">✓ 수정 저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===========================================================
+    // ⚙️ Firebase 실시간 데이터베이스 설정 완료
+    // ===========================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyDc1Wd8_TSx07MrKNoOtMCJ3CdobV7N2FM",
+      authDomain: "forum-management-system-89970.firebaseapp.com",
+      projectId: "forum-management-system-89970",
+      storageBucket: "forum-management-system-89970.firebasestorage.app",
+      messagingSenderId: "370522589403",
+      appId: "1:370522589403:web:c1a1e95149ab4a720924fe",
+      measurementId: "G-9YKS7ZZF4X"
+    };
+
+    // Firebase 초기화
+    let db = null;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+    } catch(e) {
+      console.warn("Firebase 초기화 오류:", e);
+    }
+
+    // -----------------------------------------------------------
+    // 2. 초기 원본 데이터 (11명 팀원 + 영상셀, 16개 포럼)
+    // -----------------------------------------------------------
+    const initialTeamMembers = [
+      { id: 1, name: '고호진', points: 11, attendCount: 11, volunteerCount: 0, absentCount: 0 },
+      { id: 2, name: '권승한', points: 9, attendCount: 9, volunteerCount: 0, absentCount: 0 },
+      { id: 3, name: '권혁중', points: 8, attendCount: 8, volunteerCount: 0, absentCount: 0 },
+      { id: 4, name: '김소영', points: 10, attendCount: 10, volunteerCount: 0, absentCount: 0 },
+      { id: 5, name: '김춘곤', points: 7, attendCount: 7, volunteerCount: 0, absentCount: 0 },
+      { id: 6, name: '이원호', points: 8, attendCount: 8, volunteerCount: 0, absentCount: 0 },
+      { id: 7, name: '김원종', points: 10, attendCount: 10, volunteerCount: 0, absentCount: 0 },
+      { id: 8, name: '박세은', points: 7, attendCount: 7, volunteerCount: 0, absentCount: 0 },
+      { id: 9, name: '이상우', points: 9, attendCount: 9, volunteerCount: 0, absentCount: 0 },
+      { id: 10, name: '이태양', points: 9, attendCount: 9, volunteerCount: 0, absentCount: 0 },
+      { id: 11, name: '연지언', points: 7, attendCount: 7, volunteerCount: 0, absentCount: 0 },
+      { id: 99, name: '영상셀', points: 0, attendCount: 0, volunteerCount: 0, absentCount: 0 }
+    ];
+
+    const initialForums = [
+      { id: 1, date: '9.2(수)', time: '13:30', company: '아주경제', title: "'2026 GGGF'", topic: 'KOREA, State of AI', location: '더플라자 호텔 별관 LL층 그랜드볼룸', attendees: ['권혁중'] },
+      { id: 2, date: '9.8(화)', time: '09:30', company: '코리아헤럴드', title: '2026 코리아헤럴드 HIT포럼', topic: '한국 자본시장의 글로벌 도약', location: '대한상공회의소 국제회의장(지하2층)', attendees: ['이원호', '연지언'] },
+      { id: 3, date: '9.9(수)', time: '09:00', company: '파이낸셜뉴스', title: 'AI World 2026', topic: 'AI Shift - The New Economy', location: '롯데월드타워 롯데시네마(5층)', attendees: ['연지언'], note: 'VIP 티타임 08:30~' },
+      { id: 4, date: '9.10(목)', time: '14:00', company: '주간동아', title: '2026 동아AI 포럼', topic: '넥스트AI혁명, 피지컬AI가 온다', location: '여의도 FKI타워 컨퍼런스센터 3층 다이아몬드홀', attendees: ['김춘곤'] },
+      { id: 5, date: '9.10(목)', time: '07:30~09:00', company: '파이낸셜뉴스', title: '미래포럼', topic: "유성호 서울대 교수 '법의학자가 바라보는 삶과 죽음'", location: '롯데호텔 아스토스위트', attendees: ['권혁중'], note: '조찬 포럼' },
+      { id: 6, date: '9.11(금)', time: '09:00', company: '뉴스핌', title: '제14회 2026 아시아포럼', topic: 'AI 대전환·에너지 안보: 아시아 협력의 새로운 좌표', location: '페어몬트호텔 그랜드볼룸(B1)', attendees: ['권승한'] },
+      { id: 7, date: '9.14(월)', time: '14:00', company: '디지털타임스', title: 'AI포럼', topic: '피지컬AI, 대한민국 새 성장엔진', location: '은행회관', attendees: ['김원종'] },
+      { id: 8, date: '9.15(화)', time: '15:00', company: '주간한국', title: '창간62주년 기념 가을 콘서트', topic: '', location: '신사동 리버사이드호텔 7층 콘서트홀', attendees: ['이태양'] },
+      { id: 9, date: '9.15(화)', time: '09:00', company: '코리아타임스', title: '2026 Korea Times Global Conference', topic: 'AI를 넘어, 다음 시대를 이끄는 인간 중심 리더십', location: '대한상공회의소 국제회의장', attendees: ['박세은'] },
+      { id: 10, date: '9.16(수)', time: '08:30', company: '데일리안', title: '2026 Global Industry Vision Forum', topic: '피지컬 AI, K-제조의 대전환', location: 'CCMM빌딩 12층 컨벤션홀', attendees: ['이원호'], note: '전자 배정' },
+      { id: 11, date: '9.16(수)', time: '09:00', company: '디지털데일리', title: '2026 AI Innovation Forum', topic: '동반자 AI시대, AX대한민국을 디자인하다', location: '대한상공회의소 국제회의장(B2)', attendees: ['김춘곤'], note: '전자 배정' },
+      { id: 12, date: '9.17(목)', time: '07:00~09:20', company: '서울경제', title: '미래컨퍼런스 2026', topic: '한국 제조업의 美 영토 확장 해법', location: '신라호텔 다이너스티홀', attendees: ['고호진'], note: '조찬 컨퍼런스' },
+      { id: 13, date: '9.17(목)', time: '09:00~11:30', company: '아시아타임즈', title: 'AIC 2026', topic: 'AI 생태계의 완성: 초거대 인프라에서 미래 인재까지', location: '여의도 FKI타워 3층 다이아몬드홀', attendees: ['이상우'] },
+      { id: 14, date: '9.17(목)', time: '09:30', company: '파이낸셜투데이', title: '제2회 파이낸셜투데이 인사이트 포럼', topic: 'AI시대, 신뢰를 묻다', location: '중소기업중앙회 2층 파티움홀', attendees: ['이상우'] },
+      { id: 15, date: '9.17(목)', time: '14:00', company: '투데이신문', title: "제1회 투데이신문 경제포럼 '힌지'", topic: 'K자형 양극화와 부의 사다리', location: '전문건설회관(신대방동) 4층', attendees: ['이태양'], note: '전자 배정' },
+      { id: 16, date: '10.7(수)', time: '14:00', company: '소비자가만드는신문', title: '창간20주년 기념 포럼', topic: '', location: '명동 은행회관 2층 국제회의실', attendees: ['이상우'], note: '기획, 전자요청없음' }
+    ];
+
+    let teamMembers = [];
+    let forums = [];
+    let currentFilter = 'pending';
+    let sortAscending = true;
+
+    let newForumCustomAttendees = null;
+    let editingForumId = null;
+    let selectedAttendeesInModal = [];
+    let targetEditingForumId = null;
+
+    // -----------------------------------------------------------
+    // 3. Firebase 실시간 동기화 (구독 & 저장)
+    // -----------------------------------------------------------
+    function initFirebaseSync() {
+      if (!db) {
+        const savedM = localStorage.getItem('forum_team_fb_local');
+        const savedF = localStorage.getItem('forum_list_fb_local');
+        teamMembers = savedM ? JSON.parse(savedM) : JSON.parse(JSON.stringify(initialTeamMembers));
+        forums = savedF ? JSON.parse(savedF) : JSON.parse(JSON.stringify(initialForums));
+        ensureAttendeeStatus();
+        renderAll();
+        return;
+      }
+
+      // Firestore 실시간 리스너 (누군가 변경하면 1초 안에 전체 반영)
+      db.collection("forumApp").doc("globalData").onSnapshot((doc) => {
+        if (doc.exists) {
+          const data = doc.data();
+          teamMembers = data.teamMembers || JSON.parse(JSON.stringify(initialTeamMembers));
+          forums = data.forums || JSON.parse(JSON.stringify(initialForums));
+          ensureAttendeeStatus();
+          renderAll();
+          document.getElementById('syncStatus').innerText = "🟢 실시간 동기화 중 (연결됨)";
+        } else {
+          // 최초 데이터가 DB에 없을 경우 초기 데이터로 저장
+          saveData(true);
+        }
+      }, (err) => {
+        console.error("Firestore sync error:", err);
+        document.getElementById('syncStatus').innerText = "⚠️ 동기화 오류 (보안 규칙 확인)";
+      });
+    }
+
+    function ensureAttendeeStatus() {
+      forums.forEach(f => {
+        if (!f.attendeeStatus) {
+          f.attendeeStatus = {};
+          if (f.attendees) {
+            f.attendees.forEach(a => f.attendeeStatus[a] = f.status || 'pending');
+          }
+        }
+      });
+    }
+
+    function saveData(isInit = false) {
+      if (isInit) {
+        teamMembers = JSON.parse(JSON.stringify(initialTeamMembers));
+        forums = JSON.parse(JSON.stringify(initialForums));
+        ensureAttendeeStatus();
+      }
+
+      if (db) {
+        db.collection("forumApp").doc("globalData").set({
+          teamMembers: teamMembers,
+          forums: forums,
+          lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(err => console.error("Firestore save failed:", err));
+      } else {
+        localStorage.setItem('forum_team_fb_local', JSON.stringify(teamMembers));
+        localStorage.setItem('forum_list_fb_local', JSON.stringify(forums));
+      }
+    }
+
+    function resetData() {
+      if (confirm('전체 데이터를 초기값으로 리셋하시겠습니까?\n모든 팀원의 화면에서도 동시에 초기화됩니다.')) {
+        saveData(true);
+      }
+    }
+
+    // -----------------------------------------------------------
+    // 4. 핵심 배정 로직: 환산 점수 & 자동 추천 & 정렬
+    // -----------------------------------------------------------
+    const PENDING_WEIGHT = 1.0;
+
+    function getPendingAssignments(memberName) {
+      let count = 0;
+      forums.forEach(f => {
+        if (f.attendees && f.attendees.indexOf(memberName) !== -1) {
+          if (f.attendeeStatus && f.attendeeStatus[memberName] === 'pending') {
+            count++;
+          }
+        }
+      });
+      return count;
+    }
+
+    function getMemberVirtualScore(member) {
+      const pendingCount = getPendingAssignments(member.name);
+      return (Number(member.points) || 0) + (pendingCount * PENDING_WEIGHT);
+    }
+
+    function getRecommendedAttendee() {
+      const candidateMembers = teamMembers.filter(m => m.name !== '영상셀');
+      if (!candidateMembers || candidateMembers.length === 0) return '직원없음';
+
+      const sorted = candidateMembers.slice().sort(function(a, b) {
+        const vScoreA = getMemberVirtualScore(a);
+        const vScoreB = getMemberVirtualScore(b);
+        if (vScoreA !== vScoreB) return vScoreA - vScoreB;
+        return (Number(a.points) || 0) - (Number(b.points) || 0);
+      });
+
+      return (sorted[0] && sorted[0].name) ? sorted[0].name : '미정';
+    }
+
+    function parseDateToScore(dateStr, timeStr) {
+      if (!dateStr) return 9999999999;
+      let month = 0, day = 0, hour = 0, minute = 0;
+      const match = dateStr.match(/(\d{1,2})[.\-/월]\s*(\d{1,2})/);
+      if (match) { month = parseInt(match, 10); day = parseInt(match[2], 10); }
+      if (timeStr) {
+        const tMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+        if (tMatch) { hour = parseInt(tMatch, 10); minute = parseInt(tMatch[2], 10); }
+      }
+      return (month * 1000000) + (day * 10000) + (hour * 100) + minute;
+    }
+
+    function sortForumsByDate(forceAsc) {
+      if (forceAsc !== undefined) sortAscending = forceAsc;
+      else sortAscending = !sortAscending;
+
+      forums.sort(function(a, b) {
+        const scoreA = parseDateToScore(a.date, a.time);
+        const scoreB = parseDateToScore(b.date, b.time);
+        return sortAscending ? (scoreA - scoreB) : (scoreB - scoreA);
+      });
+      renderForums();
+
+      const btn = document.getElementById('btnSortDate');
+      if (btn) btn.innerText = sortAscending ? '📅 날짜 빠른순 정렬 ↑' : '📅 날짜 늦은순 정렬 ↓';
+    }
+
+    function setFilter(filter, btn) {
+      currentFilter = filter;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      renderForums();
+    }
+
+    // -----------------------------------------------------------
+    // 5. 화면 렌더링 (순위표 & 포럼 목록)
+    // -----------------------------------------------------------
+    function renderMembers() {
+      const container = document.getElementById('memberListContainer');
+      if (!container) return;
+
+      const sorted = teamMembers
+        .filter(m => m.name !== '영상셀')
+        .map(m => ({
+          ...m,
+          pendingCount: getPendingAssignments(m.name),
+          virtualScore: getMemberVirtualScore(m)
+        }))
+        .sort((a, b) => {
+          if (a.virtualScore !== b.virtualScore) return a.virtualScore - b.virtualScore;
+          return (Number(a.points) || 0) - (Number(b.points) || 0);
+        });
+
+      const minVirtualScore = sorted[0] ? sorted[0].virtualScore : 0;
+
+      container.innerHTML = sorted.map((m, idx) => {
+        const isPriority = m.virtualScore === minVirtualScore;
+        return `
+          <div class="member-item ${isPriority ? 'priority' : ''}">
+            <div class="member-name">
+              <span class="badge-rank ${idx === 0 ? 'top' : ''}">${idx + 1}</span>
+              <span>${m.name} <span style="font-size:11px; font-weight:500; color:#64748b;">(${m.points}점)</span></span>
+            </div>
+            <span class="badge-pending ${m.pendingCount > 0 ? 'has-pending' : ''}">
+              예정 ${m.pendingCount}건
+            </span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderForums() {
+      const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+      const container = document.getElementById('forumListContainer');
+      if (!container) return;
+
+      const filtered = forums.filter(f => {
+        const isPending = f.attendees && f.attendees.some(a => (f.attendeeStatus && f.attendeeStatus[a] === 'pending'));
+        const matchesTab = currentFilter === 'all' ? true : isPending;
+        
+        const atts = Array.isArray(f.attendees) ? f.attendees : [];
+        const matchesSearch = (f.company || '').toLowerCase().indexOf(search) !== -1 || 
+                              (f.title || '').toLowerCase().indexOf(search) !== -1 || 
+                              (f.topic || '').toLowerCase().indexOf(search) !== -1 || 
+                              atts.some(a => a.toLowerCase().indexOf(search) !== -1) || 
+                              (f.location || '').toLowerCase().indexOf(search) !== -1;
+        return matchesTab && matchesSearch;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8; font-size: 13px;">해당 조건의 포럼 일정이 없습니다.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(f => {
+        const isFullyCompleted = f.attendees && f.attendees.length > 0 && !f.attendees.some(a => f.attendeeStatus[a] === 'pending');
+        
+        const attendeesHtml = (f.attendees || []).map(a => {
+          const status = (f.attendeeStatus && f.attendeeStatus[a]) ? f.attendeeStatus[a] : 'pending';
+          let statusTag = '';
+          if (status === 'attended') statusTag = '<span class="tag tag-status-attended">✓ 일반 참석 (+1)</span>';
+          if (status === 'volunteer') statusTag = '<span class="tag tag-status-volunteer">🌟 자원 참석 (+2)</span>';
+          if (status === 'absent') statusTag = '<span class="tag tag-status-absent">⚠️ 불참 (-1)</span>';
+
+          return `
+            <div class="attendee-row">
+              <span class="attendee-name">👤 ${a}</span>
+              <div class="action-group">
+                ${status === 'pending' ? `
+                  <button class="btn btn-action-attended" onclick="updateAttendeeStatus(${f.id}, '${a}', 'attended')" title="참석 처리 (+1점)">✓ 참석 (+1)</button>
+                  <button class="btn btn-action-volunteer" onclick="updateAttendeeStatus(${f.id}, '${a}', 'volunteer')" title="자원 처리 (+2점)">🌟 자원 (+2)</button>
+                  <button class="btn btn-action-absent" onclick="updateAttendeeStatus(${f.id}, '${a}', 'absent')" title="불참 처리 (-1점)">⚠️ 불참 (-1)</button>
+                ` : `
+                  ${statusTag}
+                  <button class="btn btn-outline" style="font-size: 11px; padding: 5px 8px;" onclick="updateAttendeeStatus(${f.id}, '${a}', 'pending')">↩ 취소</button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="forum-card ${isFullyCompleted ? 'completed' : ''}">
+            <div class="forum-header">
+              <div class="forum-tags">
+                <span class="tag tag-date">${f.date || '일정미정'}</span>
+                <span class="tag tag-company">${f.company || '언론사'}</span>
+                ${f.time ? `<span style="font-size:11px; color:#475569; font-weight:600;">⏰ ${f.time}</span>` : ''}
+                ${f.note ? `<span style="font-size:11px; background:#fff1f2; color:#be123c; padding:2px 6px; border-radius:4px; font-weight:600;">${f.note}</span>` : ''}
+              </div>
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-outline" style="padding: 4px 8px; font-size: 11px; color: #2563eb;" onclick="openEditModal(${f.id})" title="정보 수정">✏️ 수정</button>
+                <button class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="deleteForum(${f.id})" title="삭제">🗑️ 삭제</button>
+              </div>
+            </div>
+
+            <div class="forum-title">${f.title || '행사명 미지정'}</div>
+            ${f.topic ? `<div class="forum-topic-text">${f.topic}</div>` : ''}
+            ${f.location ? `<div class="forum-meta">📍 ${f.location}</div>` : ''}
+
+            <div class="forum-actions" style="display:block;">
+              <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 4px;">
+                <button type="button" class="btn-change-user" onclick="openAttendeeModal(${f.id})">👥 인원 배정/변경</button>
+              </div>
+              ${attendeesHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAll() {
+      renderMembers();
+      renderForums();
+      handleTextPreview();
+    }
+
+    // -----------------------------------------------------------
+    // 6. 상태 변경 및 점수 계산 (Firestore 동기화)
+    // -----------------------------------------------------------
+    function updateAttendeeStatus(forumId, attendeeName, newStatus) {
+      const target = forums.find(f => f.id === forumId);
+      if (!target) return;
+      if (!target.attendeeStatus) target.attendeeStatus = {};
+      
+      const prevStatus = target.attendeeStatus[attendeeName] || 'pending';
+      if (prevStatus === newStatus) return;
+
+      function getDelta(s) { return s === 'attended' ? 1 : s === 'volunteer' ? 2 : s === 'absent' ? -1 : 0; }
+      const pointDiff = getDelta(newStatus) - getDelta(prevStatus);
+
+      const m = teamMembers.find(member => member.name === attendeeName);
+      if (m && m.name !== '영상셀') {
+        let pts = Number(m.points) || 0;
+        let attCnt = Number(m.attendCount) || 0;
+        let volCnt = Number(m.volunteerCount) || 0;
+        let absCnt = Number(m.absentCount) || 0;
+
+        if (prevStatus === 'attended') attCnt--;
+        if (prevStatus === 'volunteer') { attCnt--; volCnt--; }
+        if (prevStatus === 'absent') absCnt--;
+
+        if (newStatus === 'attended') attCnt++;
+        if (newStatus === 'volunteer') { attCnt++; volCnt++; }
+        if (newStatus === 'absent') absCnt++;
+
+        m.points = Math.max(0, pts + pointDiff);
+        m.attendCount = Math.max(0, attCnt);
+        m.volunteerCount = Math.max(0, volCnt);
+        m.absentCount = Math.max(0, absCnt);
+      }
+
+      target.attendeeStatus[attendeeName] = newStatus;
+      saveData();
+      renderAll();
+    }
+
+    function deleteForum(id) {
+      if (!confirm('해당 포럼 일정을 삭제하시겠습니까?')) return;
+      const target = forums.find(f => f.id === id);
+      if (target && target.attendees && target.attendeeStatus) {
+        target.attendees.forEach(a => {
+          if (target.attendeeStatus[a] !== 'pending') {
+            updateAttendeeStatus(id, a, 'pending');
+          }
+        });
+      }
+      forums = forums.filter(f => f.id !== id);
+      saveData();
+      renderAll();
+    }
+
+    // -----------------------------------------------------------
+    // 7. 텔레그램 복사 기능 (일자 & 매체명 볼드 처리)
+    // -----------------------------------------------------------
+    function copyTelegramSchedule() {
+      const pendingForums = forums.filter(f => f.attendees && f.attendees.some(a => f.attendeeStatus && f.attendeeStatus[a] === 'pending'));
+      
+      if (pendingForums.length === 0) {
+        alert('현재 예정(보류) 중인 포럼 일정이 없습니다.');
+        return;
+      }
+
+      const dateGroups = {};
+      const dateOrder = [];
+
+      for (let i = 0; i < pendingForums.length; i++) {
+        const f = pendingForums[i];
+        const date = f.date || '일정미정';
+        if (!dateGroups[date]) { dateGroups[date] = []; dateOrder.push(date); }
+        dateGroups[date].push(f);
+      }
+
+      const sections = [];
+      for (let i = 0; i < dateOrder.length; i++) {
+        const date = dateOrder[i];
+        const items = dateGroups[date];
+        let sectionText = `**■ ${date}**\n\n`;
+        
+        const itemTexts = [];
+        for (let j = 0; j < items.length; j++) {
+          const f = items[j];
+          const atts = Array.isArray(f.attendees) ? f.attendees.join(', ') : '미정';
+          let itemStr = `- **[${f.company}]** ${f.title}\n`;
+          if (f.topic && f.topic.trim()) itemStr += `  ${f.topic.trim()}\n`;
+          
+          let timeLoc = '';
+          if (f.time && f.time.trim()) { 
+            timeLoc += f.time.trim(); 
+            if (f.note && f.note.trim()) timeLoc += ` (${f.note.trim()})`; 
+          }
+          if (f.location && f.location.trim()) {
+            timeLoc += (timeLoc ? ' / ' : '') + f.location.trim();
+          }
+          if (timeLoc) itemStr += `  ${timeLoc}\n`;
+          
+          itemStr += `  참석: ${atts}`;
+          itemTexts.push(itemStr);
+        }
+        sectionText += itemTexts.join('\n\n');
+        sections.push(sectionText);
+      }
+
+      const fullMessage = sections.join('\n\n');
+      navigator.clipboard.writeText(fullMessage)
+        .then(() => alert('📋 텔레그램용 예정 일정(Pending)이 클립보드에 복사되었습니다!'))
+        .catch(() => alert('복사에 실패했습니다. 브라우저 권한을 확인해주세요.'));
+    }
+
+    // -----------------------------------------------------------
+    // 8. 팀원 관리 모달
+    // -----------------------------------------------------------
+    function openTeamModal() {
+      renderTeamManageList();
+      document.getElementById('teamModal').style.display = 'flex';
+    }
+
+    function closeTeamModal() {
+      document.getElementById('teamModal').style.display = 'none';
+      handleTextPreview();
+    }
+
+    function renderTeamManageList() {
+      const container = document.getElementById('teamManageList');
+      container.innerHTML = teamMembers.map(m => `
+        <li style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #f1f5f9;">
+          <span style="font-weight:700; color:#1e293b; font-size:14px;">
+            ${m.name} 
+            <span style="font-weight:400; color:#64748b; font-size:12px;">(점수: ${m.points}점, 참석: ${m.attendCount || 0}회)</span>
+          </span>
+          <button style="border:none; background:none; cursor:pointer; font-size:14px;" onclick="deleteTeamMember(${m.id})">🗑️</button>
+        </li>
+      `).join('');
+    }
+
+    function addTeamMember() {
+      const input = document.getElementById('newMemberName');
+      const name = input.value.trim();
+      if (!name) return;
+      if (teamMembers.find(m => m.name === name)) {
+        alert('이미 존재하는 이름입니다.');
+        return;
+      }
+      teamMembers.push({
+        id: Date.now(), name: name, points: 0, attendCount: 0, volunteerCount: 0, absentCount: 0
+      });
+      input.value = '';
+      saveData();
+      renderTeamManageList();
+      renderAll();
+    }
+
+    function deleteTeamMember(id) {
+      if (!confirm('팀원을 삭제하시겠습니까?\n(기존 포럼 참석 기록에는 이름이 텍스트로 남지만, 순위 배정 대상에서는 제외됩니다.)')) return;
+      teamMembers = teamMembers.filter(m => m.id !== id);
+      saveData();
+      renderTeamManageList();
+      renderAll();
+    }
+
+    // -----------------------------------------------------------
+    // 9. 텍스트 파서 & 등록
+    // -----------------------------------------------------------
+    function parseText(text) {
+      if (!text || typeof text !== 'string') text = '';
+      const lines = text.split('\n');
+      let date = '', company = '', title = '', topic = '', time = '', location = '';
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        if (line.indexOf('■') !== -1) {
+          date = line.replace('■', '').trim();
+        } else if (line.indexOf('[') !== -1 && line.indexOf(']') !== -1) {
+          const open = line.indexOf('[');
+          const close = line.indexOf(']');
+          if (close > open) {
+            company = line.substring(open + 1, close).trim();
+            title = line.substring(close + 1).replace(/^[\s\-:]+/, '').trim();
+          }
+        } else if (line.indexOf('/') !== -1 && (line.indexOf(':') !== -1 || line.indexOf('00') !== -1 || line.indexOf('30') !== -1 || line.indexOf('시') !== -1)) {
+          const parts = line.split('/');
+          time = parts[0].trim();
+          location = parts.slice(1).join('/').trim();
+        } else {
+          if (!date || line.indexOf(date) === -1) {
+            topic = topic ? (topic + ' ' + line) : line;
+          }
+        }
+      }
+      return {
+        date: date || '9.2(수)', time: time || '14:00', company: company || '스카이데일리',
+        title: title || '창간 15주년 기념식 AI-AX 혁신포럼', topic: topic || 'AX 현재와 미래', location: location || '프레스센터 20층 국제회의장'
+      };
+    }
+
+    function handleTextPreview() {
+      try {
+        const textarea = document.getElementById('forumRawText');
+        if (!textarea) return;
+
+        const parsed = parseText(textarea.value);
+        document.getElementById('pvDate').innerText = parsed.date;
+        document.getElementById('pvTime').innerText = parsed.time;
+        document.getElementById('pvCompany').innerText = parsed.company;
+        document.getElementById('pvLocation').innerText = parsed.location;
+        document.getElementById('pvTitle').innerText = parsed.title;
+        document.getElementById('pvTopic').innerText = parsed.topic || '(주제 없음)';
+
+        const targetAttendees = (newForumCustomAttendees && newForumCustomAttendees.length > 0) 
+          ? newForumCustomAttendees : [getRecommendedAttendee()];
+
+        document.getElementById('pvAttendeeList').innerHTML = targetAttendees.map(name => 
+          `<span style="background:#fef3c7; color:#92400e; padding:3px 8px; border-radius:6px; font-weight:800; border:1px solid #fde68a;">${name}</span>`
+        ).join('');
+      } catch(e) {}
+    }
+
+    function saveParsedForum() {
+      try {
+        const rawEl = document.getElementById('forumRawText');
+        if (!rawEl || !rawEl.value.trim()) {
+          alert('등록할 포럼 안내 텍스트를 입력해주세요.');
+          return;
+        }
+        const parsed = parseText(rawEl.value);
+        const finalAttendees = (newForumCustomAttendees && newForumCustomAttendees.length > 0)
+          ? newForumCustomAttendees : [getRecommendedAttendee()];
+
+        const newAttendeeStatus = {};
+        finalAttendees.forEach(a => newAttendeeStatus[a] = 'pending');
+
+        forums.unshift({
+          id: Date.now(),
+          date: parsed.date, time: parsed.time, company: parsed.company,
+          title: parsed.title, topic: parsed.topic, location: parsed.location,
+          attendees: finalAttendees, attendeeStatus: newAttendeeStatus, note: ''
+        });
+
+        sortForumsByDate(true);
+        saveData();
+        renderAll();
+
+        rawEl.value = '';
+        newForumCustomAttendees = null;
+        handleTextPreview();
+        alert(`✅ [${parsed.company}] 등록 완료!\n👉 배정 참석자: [${finalAttendees.join(', ')}]`);
+      } catch (err) { alert('오류 발생: ' + err.message); }
+    }
+
+    // -----------------------------------------------------------
+    // 10. 모달 이벤트 핸들러
+    // -----------------------------------------------------------
+    function openEditModal(forumId) {
+      targetEditingForumId = forumId;
+      const f = forums.find(item => item.id === forumId);
+      if (!f) return;
+      document.getElementById('editDate').value = f.date || '';
+      document.getElementById('editTime').value = f.time || '';
+      document.getElementById('editCompany').value = f.company || '';
+      document.getElementById('editNote').value = f.note || '';
+      document.getElementById('editTitle').value = f.title || '';
+      document.getElementById('editTopic').value = f.topic || '';
+      document.getElementById('editLocation').value = f.location || '';
+      document.getElementById('editForumModal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+      document.getElementById('editForumModal').style.display = 'none';
+      targetEditingForumId = null;
+    }
+
+    function saveForumEdit() {
+      if (!targetEditingForumId) return;
+      const f = forums.find(item => item.id === targetEditingForumId);
+      if (f) {
+        f.date = document.getElementById('editDate').value.trim();
+        f.time = document.getElementById('editTime').value.trim();
+        f.company = document.getElementById('editCompany').value.trim();
+        f.note = document.getElementById('editNote').value.trim();
+        f.title = document.getElementById('editTitle').value.trim();
+        f.topic = document.getElementById('editTopic').value.trim();
+        f.location = document.getElementById('editLocation').value.trim();
+        saveData();
+        renderForums();
+      }
+      closeEditModal();
+    }
+
+    function openAttendeeModal(forumId) {
+      editingForumId = forumId;
+      const target = forums.find(f => f.id === forumId);
+      if (!target) return;
+      selectedAttendeesInModal = Array.isArray(target.attendees) ? target.attendees.slice() : [];
+      document.getElementById('modalTitle').innerText = `👥 [${target.company}] 참석자 배정 (최대 3명)`;
+      renderModalGrid();
+      document.getElementById('attendeeModal').style.display = 'flex';
+    }
+
+    function openNewForumAttendeeModal() {
+      editingForumId = null;
+      selectedAttendeesInModal = (newForumCustomAttendees && newForumCustomAttendees.length > 0)
+        ? newForumCustomAttendees.slice() : [getRecommendedAttendee()];
+      document.getElementById('modalTitle').innerText = `👥 신규 포럼 참석자 선택 (최대 3명)`;
+      renderModalGrid();
+      document.getElementById('attendeeModal').style.display = 'flex';
+    }
+
+    function closeAttendeeModal() {
+      document.getElementById('attendeeModal').style.display = 'none';
+      editingForumId = null;
+    }
+
+    function renderModalGrid() {
+      const container = document.getElementById('memberSelectGrid');
+      const sorted = teamMembers.slice().sort((a, b) => (a.points || 0) - (b.points || 0));
+      container.innerHTML = sorted.map(m => {
+        const isSelected = selectedAttendeesInModal.indexOf(m.name) !== -1;
+        return `
+          <div class="member-chip ${isSelected ? 'selected' : ''}" onclick="toggleMemberSelection('${m.name}')">
+            ${m.name}
+          </div>
+        `;
+      }).join('');
+      document.getElementById('modalSelectedCount').innerText = selectedAttendeesInModal.length;
+    }
+
+    function toggleMemberSelection(name) {
+      const idx = selectedAttendeesInModal.indexOf(name);
+      if (idx !== -1) {
+        selectedAttendeesInModal.splice(idx, 1);
+      } else {
+        if (selectedAttendeesInModal.length >= 3) {
+          alert('⚠️ 참석자는 최대 3명까지만 선택할 수 있습니다.');
+          return;
+        }
+        selectedAttendeesInModal.push(name);
+      }
+      renderModalGrid();
+    }
+
+    function saveAttendeeSelection() {
+      if (selectedAttendeesInModal.length === 0) {
+        alert('최소 1명 이상의 참석자를 선택해주세요.');
+        return;
+      }
+      if (editingForumId !== null) {
+        const target = forums.find(f => f.id === editingForumId);
+        if (target) {
+          const removed = target.attendees.filter(a => selectedAttendeesInModal.indexOf(a) === -1);
+          removed.forEach(a => {
+            if (target.attendeeStatus && target.attendeeStatus[a] !== 'pending') {
+              updateAttendeeStatus(editingForumId, a, 'pending');
+            }
+          });
+          selectedAttendeesInModal.forEach(a => {
+            if (!target.attendeeStatus) target.attendeeStatus = {};
+            if (!target.attendeeStatus[a]) target.attendeeStatus[a] = 'pending';
+          });
+          target.attendees = selectedAttendeesInModal.slice();
+          saveData();
+          renderForums();
+          renderMembers();
+        }
+      } else {
+        newForumCustomAttendees = selectedAttendeesInModal.slice();
+        handleTextPreview();
+      }
+      closeAttendeeModal();
+    }
+
+    // -----------------------------------------------------------
+    // 11. 초기 실행 (Window Load)
+    // -----------------------------------------------------------
+    window.onload = function() {
+      initFirebaseSync();
+      sortForumsByDate(true);
+    };
+  </script>
+</body>
+</html>
