@@ -378,36 +378,42 @@
     let targetEditingForumId = null;
 
     // -----------------------------------------------------------
-    // 3. Firebase 실시간 동기화 (구독 & 저장)
+    // [보강 완료] 3. Firebase 실시간 동기화 (안전장치 포함 전체 교체)
     // -----------------------------------------------------------
     function initFirebaseSync() {
       if (!db) {
-        const savedM = localStorage.getItem('forum_team_fb_local');
-        const savedF = localStorage.getItem('forum_list_fb_local');
-        teamMembers = savedM ? JSON.parse(savedM) : JSON.parse(JSON.stringify(initialTeamMembers));
-        forums = savedF ? JSON.parse(savedF) : JSON.parse(JSON.stringify(initialForums));
-        ensureAttendeeStatus();
-        renderAll();
+        console.warn("DB 미연결: 로컬 데이터 사용");
+        loadLocalFallback();
         return;
       }
 
-      // Firestore 실시간 리스너 (누군가 변경하면 1초 안에 전체 반영)
+      // Firestore 실시간 리스너 (일시적 지연 시 덮어쓰기 방지)
       db.collection("forumApp").doc("globalData").onSnapshot((doc) => {
         if (doc.exists) {
           const data = doc.data();
-          teamMembers = data.teamMembers || JSON.parse(JSON.stringify(initialTeamMembers));
-          forums = data.forums || JSON.parse(JSON.stringify(initialForums));
+          teamMembers = data.teamMembers && data.teamMembers.length > 0 ? data.teamMembers : teamMembers;
+          forums = data.forums && data.forums.length > 0 ? data.forums : forums;
           ensureAttendeeStatus();
           renderAll();
-          document.getElementById('syncStatus').innerText = "🟢 실시간 동기화 중 (연결됨)";
+          document.getElementById('syncStatus').innerText = "🟢 실시간 동기화 중";
         } else {
-          // 최초 데이터가 DB에 없을 경우 초기 데이터로 저장
+          console.log("DB 문서가 비어 있습니다. 초기 데이터를 셋업합니다.");
           saveData(true);
         }
       }, (err) => {
-        console.error("Firestore sync error:", err);
-        document.getElementById('syncStatus').innerText = "⚠️ 동기화 오류 (보안 규칙 확인)";
+        console.error("Firestore 동기화 오류 발생:", err);
+        document.getElementById('syncStatus').innerText = "⚠️ 동기화 실패 (규칙 확인 필요)";
+        loadLocalFallback();
       });
+    }
+
+    function loadLocalFallback() {
+      const savedM = localStorage.getItem('forum_team_fb_local');
+      const savedF = localStorage.getItem('forum_list_fb_local');
+      teamMembers = savedM ? JSON.parse(savedM) : JSON.parse(JSON.stringify(initialTeamMembers));
+      forums = savedF ? JSON.parse(savedF) : JSON.parse(JSON.stringify(initialForums));
+      ensureAttendeeStatus();
+      renderAll();
     }
 
     function ensureAttendeeStatus() {
