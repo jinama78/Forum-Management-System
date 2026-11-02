@@ -326,10 +326,11 @@
     try {
       firebase.initializeApp(firebaseConfig);
       
-      // 👇 [중요] 사내 방화벽/프록시 우회를 위해 Long Polling 강제 설정 추가
-      firebase.firestore().settings({
-        experimentalForceLongPolling: true
-      });
+      // 👇 사내 방화벽 우회 강화 설정
+firebase.firestore().settings({
+  experimentalAutoDetectLongPolling: true, // 강제 대신 자동 감지로 변경
+  merge: true
+});
       
       db = firebase.firestore();
     } catch(e) {
