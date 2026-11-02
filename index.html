@@ -325,6 +325,12 @@
     let db = null;
     try {
       firebase.initializeApp(firebaseConfig);
+      
+      // 👇 [중요] 사내 방화벽/프록시 우회를 위해 Long Polling 강제 설정 추가
+      firebase.firestore().settings({
+        experimentalForceLongPolling: true
+      });
+      
       db = firebase.firestore();
     } catch(e) {
       console.warn("Firebase 초기화 오류:", e);
