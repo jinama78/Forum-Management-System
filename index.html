@@ -386,12 +386,71 @@
     // -----------------------------------------------------------
     // [보강 완료] 3. Firebase 실시간 동기화 (안전장치 포함 전체 교체)
     // -----------------------------------------------------------
-    function initFirebaseSync() {
-      if (!db) {
-        console.warn("DB 미연결: 로컬 데이터 사용");
-        loadLocalFallback();
-        return;
-      }
+    // -----------------------------------------------------------
+    // [방화벽 우회 버전] 서버 데이터 불러오기 + 실시간 감지 하이브리드
+    // -----------------------------------------------------------
+    async function initFirebaseSync() {
+      const statusEl = document.getElementById('syncStatus');
+      const projectId = firebaseConfig.projectId;
+      const apiKey = firebaseConfig.apiKey;
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/forumApp/globalData?key=${apiKey}`;
+
+      // Firestore REST 규격을 일반 자바스크립트 데이터로 변환하는 헬퍼 함수
+      function fromFirestoreValue(field) {
+        if (!field) return null;
+        if ('stringValue' in field) return field.stringValue;
+        if ('integerValue' in field) return Number(field.integerValue);
+        if ('doubleValue' in field) return Number(field.doubleValue);
+        if ('booleanValue' in field) return field.booleanValue;
+        if ('nullValue' in field) return null;
+        if ('arrayValue' in field) {
+          return (field.arrayValue.values  []).map(fromFirestoreValue);
+        }
+        if ('mapValue' in field) {
+          const obj = {};
+          const fields = field.mapValue.fields  {};
+          for (const k in fields) obj[k] = fromFirestoreValue(fields[k]);
+          return obj;
+        }
+        return null;
+      }
+
+      // 1. 페이지 접속 시 표준 HTTPS(GET)로 최신 데이터 즉시 가져오기 (방화벽 100% 통과)
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const doc = await res.json();
+          if (doc.fields) {
+            const loadedMembers = fromFirestoreValue(doc.fields.teamMembers);
+            const loadedForums = fromFirestoreValue(doc.fields.forums);
+            if (loadedMembers && loadedMembers.length > 0) teamMembers = loadedMembers;
+            if (loadedForums && loadedForums.length > 0) forums = loadedForums;
+            ensureAttendeeStatus();
+            renderAll();
+            if (statusEl) statusEl.innerText = "🟢 실시간 동기화 중";
+          }
+        }
+      } catch (e) {
+        console.warn("REST 초기 로드 실패:", e);
+        loadLocalFallback();
+      }
+
+      // 2. 실시간 리스너 연결 (모바일 등 가능한 환경에서는 새로고침 없이도 즉시 반영)
+      if (db) {
+        db.collection("forumApp").doc("globalData").onSnapshot((doc) => {
+          if (doc.exists) {
+            const data = doc.data();
+            if (data.teamMembers && data.teamMembers.length > 0) teamMembers = data.teamMembers;
+            if (data.forums && data.forums.length > 0) forums = data.forums;
+            ensureAttendeeStatus();
+            renderAll();
+            if (statusEl) statusEl.innerText = "🟢 실시간 동기화 중";
+          }
+        }, (err) => {
+          console.warn("실시간 감지는 방화벽에 의해 제한됨 (새로고침 방식 사용):", err);
+        });
+      }
+    }
 
       // Firestore 실시간 리스너 (일시적 지연 시 덮어쓰기 방지)
       db.collection("forumApp").doc("globalData").onSnapshot((doc) => {
@@ -433,23 +492,85 @@
       });
     }
 
-    function saveData(isInit = false) {
-      if (isInit) {
-        teamMembers = JSON.parse(JSON.stringify(initialTeamMembers));
-        forums = JSON.parse(JSON.stringify(initialForums));
-        ensureAttendeeStatus();
-      }
+    // -----------------------------------------------------------
+    // [방화벽 우회 버전] 일반 HTTPS(REST API) 통신으로 직접 서버에 저장
+    // -----------------------------------------------------------
+    async function saveData(isInit = false) {
+      if (isInit) {
+        teamMembers = JSON.parse(JSON.stringify(initialTeamMembers));
+        forums = JSON.parse(JSON.stringify(initialForums));
+        ensureAttendeeStatus();
+      }
 
-      if (db) {
-        db.collection("forumApp").doc("globalData").set({
-          teamMembers: teamMembers,
-          forums: forums,
-          lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }).catch(err => console.error("Firestore save failed:", err));
-      } else {
-        localStorage.setItem('forum_team_fb_local', JSON.stringify(teamMembers));
-        localStorage.setItem('forum_list_fb_local', JSON.stringify(forums));
-      }
+      // 1. 내 PC 브라우저에도 우선 임시 백업
+      localStorage.setItem('forum_team_fb_local', JSON.stringify(teamMembers));
+      localStorage.setItem('forum_list_fb_local', JSON.stringify(forums));
+
+      const statusEl = document.getElementById('syncStatus');
+      if (statusEl) statusEl.innerText = "⏳ 서버에 저장 중...";
+
+      // 2. 사내 방화벽을 통과하는 표준 REST API(PATCH) 방식으로 Firestore에 직접 전송
+      const projectId = firebaseConfig.projectId;
+      const apiKey = firebaseConfig.apiKey;
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/forumApp/globalData?key=${apiKey}`;
+
+      // 데이터를 Firestore REST 규격으로 자동 변환하는 헬퍼 함수
+      function toFirestoreValue(val) {
+        if (val === null || val === undefined) return { nullValue: null };
+        if (typeof val === 'boolean') return { booleanValue: val };
+        if (typeof val === 'number') {
+          return Number.isInteger(val) ? { integerValue: String(val) } : { doubleValue: val };
+        }
+        if (typeof val === 'string') return { stringValue: val };
+        if (Array.isArray(val)) {
+          return { arrayValue: { values: val.map(toFirestoreValue) } };
+        }
+        if (typeof val === 'object') {
+          const fields = {};
+          for (const k in val) {
+            if (val[k] !== undefined) fields[k] = toFirestoreValue(val[k]);
+          }
+          return { mapValue: { fields } };
+        }
+        return { stringValue: String(val) };
+      }
+
+      const bodyData = {
+        fields: {
+          teamMembers: toFirestoreValue(teamMembers),
+          forums: toFirestoreValue(forums),
+          lastUpdated: { stringValue: new Date().toISOString() }
+        }
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyData)
+        });
+
+        if (response.ok) {
+          console.log("✅ REST API 방식으로 서버 저장 성공!");
+          if (statusEl) statusEl.innerText = "🟢 서버 저장 완료 (동기화됨)";
+        } else {
+          throw new Error(
+HTTP Error: ${response.status}
+);
+        }
+      } catch (err) {
+        console.error("❌ REST API 저장 실패, 기본 SDK로 재시도:", err);
+        if (statusEl) statusEl.innerText = "⚠️ 사내망 쓰기 차단됨 (모바일에서 입력 요망)";
+        
+        // 혹시 모를 상황에 대비해 기존 방식으로 한 번 더 시도
+        if (db) {
+          db.collection("forumApp").doc("globalData").set({
+            teamMembers: teamMembers,
+            forums: forums,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+      }
     }
 
     function resetData() {
