@@ -321,20 +321,19 @@
       measurementId: "G-9YKS7ZZF4X"
     };
 
-    // Firebase 초기화
-    let db = null;
-    try {
-      firebase.initializeApp(firebaseConfig);
-      
-      // 👇 사내 방화벽 우회 강화 설정
-firebase.firestore().settings({
-  experimentalAutoDetectLongPolling: true, // 강제 대신 자동 감지로 변경
-  merge: true
-});
-      
-      db = firebase.firestore();
-    } catch(e) {
-      console.warn("Firebase 초기화 오류:", e);
+    // Firebase 초기화 (설정 충돌 방지 및 merge 적용)
+    let db = null;
+    try {
+      const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore(app);
+      
+      // 사내망 프록시 우회 및 중복 설정 경고 방지
+      db.settings({
+        experimentalForceLongPolling: true,
+        merge: true
+      });
+    } catch(e) {
+      console.warn("Firebase 초기화 오류:", e);
     }
 
     // -----------------------------------------------------------
@@ -1035,5 +1034,4 @@ firebase.firestore().settings({
     };
   </script>
 </body>
-
-</html>
+  </html>
