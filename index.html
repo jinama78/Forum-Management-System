@@ -1,3 +1,5 @@
+t
+100%
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -399,7 +401,7 @@
     let targetEditingForumId = null;
 
     // -----------------------------------------------------------
-    // 3. Firebase 실시간 동기화
+    // 3. Firebase 실시간 동기화 (형변환 에러 패치 완료)
     // -----------------------------------------------------------
     function initFirebaseSync() {
       if (!db) {
@@ -728,7 +730,7 @@
     // 6. 상태 변경 및 점수 계산 (Firestore 동기화)
     // -----------------------------------------------------------
     function updateAttendeeStatus(forumId, attendeeName, newStatus) {
-      const target = forums.find(f => f.id === forumId);
+      const target = forums.find(f => String(f.id) === String(forumId));
       if (!target) return;
       if (!target.attendeeStatus) target.attendeeStatus = {};
       
@@ -757,7 +759,7 @@
 
     function deleteForum(id) {
       if (!confirm('해당 포럼 일정을 삭제하시겠습니까?')) return;
-      const target = forums.find(f => f.id === id);
+      const target = forums.find(f => String(f.id) === String(id));
       if (target && target.attendees && target.attendeeStatus) {
         target.attendees.forEach(a => {
           if (target.attendeeStatus[a] !== 'pending') {
@@ -765,7 +767,7 @@
           }
         });
       }
-      forums = forums.filter(f => f.id !== id);
+      forums = forums.filter(f => String(f.id) !== String(id));
       saveData();
       renderAll();
     }
@@ -975,11 +977,11 @@
     }
 
     // -----------------------------------------------------------
-    // 10. 모달 이벤트 핸들러
+    // 10. 모달 이벤트 핸들러 (엄격한 비교에서 형변환 안전비교로 전면 교체)
     // -----------------------------------------------------------
     function openEditModal(forumId) {
       targetEditingForumId = forumId;
-      const f = forums.find(item => item.id === forumId);
+      const f = forums.find(item => String(item.id) === String(forumId));
       if (!f) return;
 
       document.getElementById('editDate').value = f.date || '';
@@ -999,7 +1001,7 @@
 
     function saveForumEdit() {
       if (!targetEditingForumId) return;
-      const f = forums.find(item => item.id === targetEditingForumId);
+      const f = forums.find(item => String(item.id) === String(targetEditingForumId));
       if (f) {
         f.date = document.getElementById('editDate').value.trim();
         f.time = document.getElementById('editTime').value.trim();
@@ -1016,7 +1018,7 @@
 
     function openAttendeeModal(forumId) {
       editingForumId = forumId;
-      const target = forums.find(f => f.id === forumId);
+      const target = forums.find(f => String(f.id) === String(forumId));
       if (!target) return;
 
       selectedAttendeesInModal = Array.isArray(target.attendees) ? target.attendees.slice() : [];
@@ -1039,6 +1041,69 @@
       editingForumId = null;
     }
 
+    function renderModalGrid() {
+      const container = document.getElementById('memberSelectGrid');
+      const sorted = teamMembers.slice().sort((a, b) => (a.points || 0) - (b.points || 0));
+
+      container.innerHTML = sorted.map(m => {
+        const isSelected = selectedAttendeesInModal.indexOf(m.name) !== -1;
+        return `
+          <div class="member-chip ${isSelected ? 'selected' : ''}" onclick="toggleMemberSelection('${m.name}')">
+            ${m.name}
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('modalSelectedCount').innerText = selectedAttendeesInModal.length;
+    }
+
+    function toggleMemberSelection(name) {
+      const idx = selectedAttendeesInModal.indexOf(name);
+      if (idx !== -1) {
+        selectedAttendeesInModal.splice(idx, 1);
+      } else {
+        if (selectedAttendeesInModal.length >= 3) {
+          alert('⚠️ 참석자는 최대 3명까지만 선택할 수 있습니다.');
+          return;
+        }
+        selectedAttendeesInModal.push(name);
+      }
+      renderModalGrid();
+    }
+
+    function saveAttendeeSelection() {
+      if (selectedAttendeesInModal.length === 0) {
+        alert('최소 1명 이상의 참석자를 선택해주세요.');
+        return;
+      }
+
+      if (editingForumId !== null) {
+        const target = forums.find(f => String(f.id) === String(editingForumId));
+        if (target) {
+          const removed = target.attendees.filter(a => selectedAttendeesInModal.indexOf(a) === -1);
+          removed.forEach(a => {
+            if (target.attendeeStatus && target.attendeeStatus[a] !== 'pending') {
+              updateAttendeeStatus(editingForumId, a, 'pending');
+            }
+          });
+
+          selectedAttendeesInModal.forEach(a => {
+            if (!target.attendeeStatus) target.attendeeStatus = {};
+            if (!target.attendeeStatus[a]) target.attendeeStatus[a] = 'pending';
+          });
+
+          target.attendees = selectedAttendeesInModal.slice();
+          saveData();
+          renderForums();
+          renderMembers();
+        }
+      } else {
+        newForumCustomAttendees = selectedAttendeesInModal.slice();
+        handleTextPreview();
+      }
+      closeAttendeeModal();
+    }
+
     // -----------------------------------------------------------
     // 11. 초기 실행 (Window Load)
     // -----------------------------------------------------------
@@ -1049,4 +1114,3 @@
   </script>
 </body>
 </html>
-
