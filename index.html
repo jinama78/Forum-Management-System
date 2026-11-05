@@ -8,6 +8,9 @@
   <!-- Firebase SDK (호환 버전 9.x) -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  
+  <!-- FontAwesome 아이콘 (복사/붙여넣기 버튼 전용) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,6 +34,12 @@
     .btn-telegram:hover { background: #1b85b8; }
     .btn-team { background: #6366f1; color: #ffffff; font-weight: 700; }
     .btn-team:hover { background: #4f46e5; }
+    
+    /* 비상 우회 동기화 전용 버튼 스타일 */
+    .btn-export { background: #10b981; color: #ffffff; font-weight: 700; }
+    .btn-export:hover { background: #059669; }
+    .btn-import { background: #4f46e5; color: #ffffff; font-weight: 700; }
+    .btn-import:hover { background: #4338ca; }
 
     /* Action Buttons */
     .btn-action-attended, .btn-action-volunteer, .btn-action-absent { font-weight: 700; border-width: 1px; font-size: 11px; padding: 5px 10px; }
@@ -40,21 +49,20 @@
     .btn-action-volunteer:hover { background: #4f46e5; color: #ffffff; border-color: #4f46e5; }
     .btn-action-absent { background: #fff1f2; color: #9f1239; border: 1px solid #fecdd3; }
     .btn-action-absent:hover { background: #f43f5e; color: #ffffff; border-color: #f43f5e; }
-
+    
     /* Layout */
     .content-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
     @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } }
-
     .panel { background: #fff; padding: 22px; border-radius: 18px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
     .panel-title { font-size: 15px; font-weight: 800; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
-
+    
     /* Filter Bar */
     .filter-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .filter-tabs { display: flex; gap: 4px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
     .tab-btn { padding: 6px 16px; font-size: 12.5px; font-weight: 600; border-radius: 8px; border: none; background: transparent; cursor: pointer; color: #64748b; }
     .tab-btn.active { background: #fff; color: #2563eb; font-weight: 800; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .search-input { padding: 7px 12px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; width: 160px; }
-
+    
     /* Forum Card */
     .forum-list { display: flex; flex-direction: column; gap: 14px; }
     .forum-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
@@ -68,18 +76,16 @@
     .tag-status-attended { background: #ecfdf5; color: #047857; font-weight: 800; border: 1px solid #a7f3d0; }
     .tag-status-volunteer { background: #eef2ff; color: #4338ca; font-weight: 800; border: 1px solid #c7d2fe; }
     .tag-status-absent { background: #fff1f2; color: #be123c; font-weight: 800; border: 1px solid #fecdd3; }
-
     .forum-title { font-size: 15.5px; font-weight: 800; color: #0f172a; margin: 8px 0 2px 0; letter-spacing: -0.01em; }
     .forum-topic-text { font-size: 13.5px; font-weight: 400; color: #475569; margin: 2px 0 6px 0; line-height: 1.4; }
     .forum-meta { font-size: 12px; color: #64748b; display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
-
     .attendee-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0; margin-top: 8px; flex-wrap: wrap; gap: 8px; }
     .attendee-name { font-weight: 800; font-size: 13.5px; color: #1e293b; display: flex; align-items: center; gap: 6px; }
     .forum-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid #f1f5f9; flex-wrap: wrap; gap: 8px; }
     .btn-change-user { background: #f8fafc; color: #2563eb; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; border: 1px solid #bfdbfe; cursor: pointer; transition: all 0.2s; }
     .btn-change-user:hover { background: #eff6ff; }
     .action-group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-
+    
     /* Member List (Ranking) */
     .member-list { display: flex; flex-direction: column; gap: 8px; }
     .member-item { padding: 10px 14px; border-radius: 12px; border: 1px solid #f1f5f9; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
@@ -89,7 +95,7 @@
     .badge-rank.top { background: #f59e0b; color: #fff; }
     .badge-pending { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
     .badge-pending.has-pending { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
-
+    
     /* Text Parser Box */
     .parser-box { background: #ffffff; border: 2px solid #3b82f6; border-radius: 18px; padding: 22px; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08); }
     .parser-title { font-size: 16px; font-weight: 800; color: #1e3a8a; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
@@ -99,7 +105,7 @@
     .preview-box { background: #f8fafc; border: 1.5px dashed #93c5fd; border-radius: 12px; padding: 14px 16px; margin-top: 12px; font-size: 13px; }
     .preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; color: #1e40af; margin-top: 6px; }
     .preview-grid span { font-weight: 700; color: #0f172a; }
-
+    
     /* Modals */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
     .modal-box { background: #fff; width: 100%; max-width: 500px; border-radius: 20px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; max-height: 90vh; overflow-y: auto;}
@@ -112,7 +118,7 @@
     .member-chip.selected { background: #eff6ff; border-color: #2563eb; color: #1e40af; font-weight: 800; }
     
     .modal-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 14px; }
-
+    
     /* Edit Form */
     .edit-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
@@ -120,6 +126,11 @@
     .form-group label { font-size: 11.5px; font-weight: 700; color: #475569; }
     .form-group input { padding: 8px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; }
     .form-group input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+
+    /* 리스크 안전지대 하단 리셋 버튼 전용 스타일 */
+    .footer-safety-zone { margin-top: 32px; padding: 12px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; display: flex; justify-content: center; align-items: center; gap: 16px; }
+    .btn-reset-lowkey { background: none; border: none; font-size: 11px; color: #cbd5e1; cursor: pointer; text-decoration: underline; font-weight: 500; transition: color 0.2s; }
+    .btn-reset-lowkey:hover { color: #f43f5e; }
   </style>
 </head>
 <body>
@@ -131,9 +142,11 @@
         <h1>🏛️ 언론사 포럼 관리 시스템 <span class="sync-status" id="syncStatus">🟢 실시간 동기화 연결 중...</span></h1>
       </div>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <!-- 방화벽 우회용 비상 복사/반영 버튼 최우선 배치 -->
+        <button class="btn btn-export" onclick="exportCurrentData()" title="현재 PC 브라우저에 저장된 데이터를 복사합니다."><i class="fa-solid fa-copy"></i> 📤 PC데이터 복사</button>
+        <button class="btn btn-import" onclick="importDataToCloud()" title="복사한 데이터를 모바일망을 통해 클라우드에 올립니다."><i class="fa-solid fa-file-import"></i> 📥 모바일로 반영</button>
         <button class="btn btn-telegram" onclick="copyTelegramSchedule()">✈️ 텔레그램 일정 복사</button>
         <button class="btn btn-team" onclick="openTeamModal()">👥 팀원 변경</button>
-        <button class="btn btn-outline" onclick="resetData()">🔄 데이터 초기화</button>
       </div>
     </header>
 
@@ -146,7 +159,6 @@
             <button class="tab-btn active" onclick="setFilter('pending', this)">📌 예정 포럼</button>
             <button class="tab-btn" onclick="setFilter('all', this)">전체 내역</button>
           </div>
-
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <button class="btn btn-sort" id="btnSortDate" style="padding: 6px 10px; font-size: 12px;" onclick="sortForumsByDate()">
               📅 날짜 빠른순 정렬 ↑
@@ -154,7 +166,6 @@
             <input type="text" id="searchInput" class="search-input" placeholder="검색..." oninput="renderForums()">
           </div>
         </div>
-
         <div class="forum-list" id="forumListContainer"></div>
       </div>
 
@@ -174,7 +185,6 @@
         <span>✨ 텍스트 붙여넣기 자동 인식 등록</span>
         <span style="font-size: 12px; font-weight: 500; color: #475569;">■ 날짜 / [언론사] 행사명 / 주제 / 시간 / 장소 자동 분석</span>
       </div>
-
       <textarea id="forumRawText" class="parser-textarea" placeholder="여기에 포럼 안내 텍스트를 붙여넣으세요..." oninput="handleTextPreview()">■ 9.2(수)
  - [스카이데일리] 창간 15주년 기념식 AI-AX 혁신포럼
     AX 현재와 미래
@@ -205,12 +215,18 @@
           </button>
         </div>
       </div>
-
       <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
         <button type="button" class="btn btn-primary" style="padding: 10px 22px; font-size: 14px; font-weight: 800;" onclick="saveParsedForum()">
           ⚡ 위 내용으로 포럼 즉시 등록하기
         </button>
       </div>  
+    </div>
+
+    <!-- 가장 안전한 최하단 리스크 안전지대 (초기화 버튼 및 빌드 표기) -->
+    <div class="footer-safety-zone">
+      <span>시스템 빌드 v3.2.0 (보안 방화벽 우회 및 하이브리드 안정 패치 완료)</span>
+      <span>•</span>
+      <button class="btn-reset-lowkey" onclick="resetData()">⚠ 시스템 원본 리셋하기</button>
     </div>
   </div>
 
@@ -296,7 +312,6 @@
           <input type="text" id="editLocation">
         </div>
       </div>
-
       <div class="modal-footer">
         <div></div>
         <div style="display: flex; gap: 6px;">
@@ -322,18 +337,18 @@
     };
 
     // Firebase 초기화 (설정 충돌 방지 및 merge 적용)
-    let db = null;
-    try {
-      const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore(app);
-      
-      // 사내망 프록시 우회 및 중복 설정 경고 방지
-      db.settings({
-        experimentalForceLongPolling: true,
-        merge: true
-      });
-    } catch(e) {
-      console.warn("Firebase 초기화 오류:", e);
+    let db = null;
+    try {
+      const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore(app);
+      
+      // 사내망 프록시 우회 및 중복 설정 경고 방지
+      db.settings({
+        experimentalForceLongPolling: true,
+        merge: true
+      });
+    } catch(e) {
+      console.warn("Firebase 초기화 오류:", e);
     }
 
     // -----------------------------------------------------------
@@ -377,7 +392,6 @@
     let forums = [];
     let currentFilter = 'pending';
     let sortAscending = true;
-
     let newForumCustomAttendees = null;
     let editingForumId = null;
     let selectedAttendeesInModal = [];
@@ -445,7 +459,12 @@
           teamMembers: teamMembers,
           forums: forums,
           lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }).catch(err => console.error("Firestore save failed:", err));
+        }).then(() => {
+          document.getElementById('syncStatus').innerText = "🟢 실시간 동기화 완료";
+        }).catch(err => {
+          console.error("Firestore save failed:", err);
+          document.getElementById('syncStatus').innerText = "⚠️ 사내망 쓰기 차단됨 (우회 복사 권장)";
+        });
       } else {
         localStorage.setItem('forum_team_fb_local', JSON.stringify(teamMembers));
         localStorage.setItem('forum_list_fb_local', JSON.stringify(forums));
@@ -453,8 +472,53 @@
     }
 
     function resetData() {
-      if (confirm('전체 데이터를 초기값으로 리셋하시겠습니까?\n모든 팀원의 화면에서도 동시에 초기화됩니다.')) {
+      if (confirm('⚠️ 경고: 전체 데이터를 파이어베이스에서 초기값으로 영구 리셋하시겠습니까?\n이 작업은 모든 공유 기기 화면에서도 동시에 초기화되므로 복구할 수 없습니다.')) {
         saveData(true);
+        renderAll();
+        alert("시스템이 전체 원본 데이터로 초기화 완료되었습니다.");
+      }
+    }
+
+    // -----------------------------------------------------------
+    // [비상 동기화 기능] 방화벽 우회용 클립보드 복사 및 강제 붙여넣기 
+    // -----------------------------------------------------------
+    function exportCurrentData() {
+      const currentPayload = {
+        teamMembers: teamMembers,
+        forums: forums,
+        exportedAt: new Date().toLocaleString()
+      };
+      
+      const textData = JSON.stringify(currentPayload);
+      
+      navigator.clipboard.writeText(textData).then(() => {
+        alert("✅ 현재 PC 브라우저상 최신 데이터가 클립보드에 무사히 복사되었습니다!\n\n카카오톡 '나에게 보내기' 등에 그대로 붙여넣기(Ctrl+V)하여 모바일로 보내주세요.");
+      }).catch(() => {
+        // 복사 실패 브라우저 대응
+        prompt("아래 데이터 텍스트를 마우스 드래그로 전체 복사(Ctrl+A -> Ctrl+C)하여 모바일로 보내세요:", textData);
+      });
+    }
+
+    function importDataToCloud() {
+      const inputData = prompt("PC에서 카카오톡 등으로 안전 전송받은 데이터 원본 텍스트를 아래 입력창에 고스란히 붙여넣어 주세요:");
+      if (!inputData) return;
+
+      try {
+        const parsed = JSON.parse(inputData.trim());
+        if (parsed.teamMembers && parsed.forums) {
+          teamMembers = parsed.teamMembers;
+          forums = parsed.forums;
+          ensureAttendeeStatus();
+          renderAll();
+          
+          // 방화벽 제약이 없는 단말 환경에서 실질 강제 업로드
+          saveData();
+          alert("🎉 성공: 모바일 전송 채널을 통해 구글 클라우드 DB 연동 완료!\n이제 PC를 포함한 모든 연동 장치에서 이 데이터가 일정하게 반영됩니다.");
+        } else {
+          alert("올바르지 않은 데이터 형식입니다. 복사한 텍스트를 정확하게 입력했는지 확인해 주세요.");
+        }
+      } catch (e) {
+        alert("데이터 인식 중 분석 에러가 발생했습니다: " + e.message);
       }
     }
 
@@ -490,14 +554,13 @@
         if (vScoreA !== vScoreB) return vScoreA - vScoreB;
         return (Number(a.points) || 0) - (Number(b.points) || 0);
       });
-
       return (sorted[0] && sorted[0].name) ? sorted[0].name : '미정';
     }
 
     function parseDateToScore(dateStr, timeStr) {
       if (!dateStr) return 9999999999;
       let month = 0, day = 0, hour = 0, minute = 0;
-      const match = dateStr.match(/(\d{1,2})[.\-/월]\s*(\d{1,2})/);
+      const match = dateStr.match(/(\d{1,2})[.\-\/월]\s*(\d{1,2})/);
       if (match) { month = parseInt(match, 10); day = parseInt(match[2], 10); }
       if (timeStr) {
         const tMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
@@ -516,7 +579,6 @@
         return sortAscending ? (scoreA - scoreB) : (scoreB - scoreA);
       });
       renderForums();
-
       const btn = document.getElementById('btnSortDate');
       if (btn) btn.innerText = sortAscending ? '📅 날짜 빠른순 정렬 ↑' : '📅 날짜 늦은순 정렬 ↓';
     }
@@ -629,11 +691,9 @@
                 <button class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;" onclick="deleteForum(${f.id})" title="삭제">🗑️ 삭제</button>
               </div>
             </div>
-
             <div class="forum-title">${f.title || '행사명 미지정'}</div>
             ${f.topic ? `<div class="forum-topic-text">${f.topic}</div>` : ''}
             ${f.location ? `<div class="forum-meta">📍 ${f.location}</div>` : ''}
-
             <div class="forum-actions" style="display:block;">
               <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 4px;">
                 <button type="button" class="btn-change-user" onclick="openAttendeeModal(${f.id})">👥 인원 배정/변경</button>
@@ -793,10 +853,12 @@
       const input = document.getElementById('newMemberName');
       const name = input.value.trim();
       if (!name) return;
+
       if (teamMembers.find(m => m.name === name)) {
         alert('이미 존재하는 이름입니다.');
         return;
       }
+
       teamMembers.push({
         id: Date.now(), name: name, points: 0, attendCount: 0, volunteerCount: 0, absentCount: 0
       });
@@ -825,6 +887,7 @@
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
+
         if (line.indexOf('■') !== -1) {
           date = line.replace('■', '').trim();
         } else if (line.indexOf('[') !== -1 && line.indexOf(']') !== -1) {
@@ -844,6 +907,7 @@
           }
         }
       }
+
       return {
         date: date || '9.2(수)', time: time || '14:00', company: company || '스카이데일리',
         title: title || '창간 15주년 기념식 AI-AX 혁신포럼', topic: topic || 'AX 현재와 미래', location: location || '프레스센터 20층 국제회의장'
@@ -879,6 +943,7 @@
           alert('등록할 포럼 안내 텍스트를 입력해주세요.');
           return;
         }
+
         const parsed = parseText(rawEl.value);
         const finalAttendees = (newForumCustomAttendees && newForumCustomAttendees.length > 0)
           ? newForumCustomAttendees : [getRecommendedAttendee()];
@@ -900,6 +965,7 @@
         rawEl.value = '';
         newForumCustomAttendees = null;
         handleTextPreview();
+
         alert(`✅ [${parsed.company}] 등록 완료!\n👉 배정 참석자: [${finalAttendees.join(', ')}]`);
       } catch (err) { alert('오류 발생: ' + err.message); }
     }
@@ -911,6 +977,7 @@
       targetEditingForumId = forumId;
       const f = forums.find(item => item.id === forumId);
       if (!f) return;
+
       document.getElementById('editDate').value = f.date || '';
       document.getElementById('editTime').value = f.time || '';
       document.getElementById('editCompany').value = f.company || '';
@@ -947,6 +1014,7 @@
       editingForumId = forumId;
       const target = forums.find(f => f.id === forumId);
       if (!target) return;
+
       selectedAttendeesInModal = Array.isArray(target.attendees) ? target.attendees.slice() : [];
       document.getElementById('modalTitle').innerText = `👥 [${target.company}] 참석자 배정 (최대 3명)`;
       renderModalGrid();
@@ -970,6 +1038,7 @@
     function renderModalGrid() {
       const container = document.getElementById('memberSelectGrid');
       const sorted = teamMembers.slice().sort((a, b) => (a.points || 0) - (b.points || 0));
+
       container.innerHTML = sorted.map(m => {
         const isSelected = selectedAttendeesInModal.indexOf(m.name) !== -1;
         return `
@@ -978,6 +1047,7 @@
           </div>
         `;
       }).join('');
+
       document.getElementById('modalSelectedCount').innerText = selectedAttendeesInModal.length;
     }
 
@@ -1000,6 +1070,7 @@
         alert('최소 1명 이상의 참석자를 선택해주세요.');
         return;
       }
+
       if (editingForumId !== null) {
         const target = forums.find(f => f.id === editingForumId);
         if (target) {
@@ -1009,10 +1080,12 @@
               updateAttendeeStatus(editingForumId, a, 'pending');
             }
           });
+
           selectedAttendeesInModal.forEach(a => {
             if (!target.attendeeStatus) target.attendeeStatus = {};
             if (!target.attendeeStatus[a]) target.attendeeStatus[a] = 'pending';
           });
+
           target.attendees = selectedAttendeesInModal.slice();
           saveData();
           renderForums();
@@ -1034,4 +1107,5 @@
     };
   </script>
 </body>
-  </html>
+</html>
+
