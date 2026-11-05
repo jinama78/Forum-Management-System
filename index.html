@@ -9,7 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   
-  <!-- FontAwesome 아이콘 (복사/붙여넣기 버튼 전용) -->
+  <!-- FontAwesome 아이콘 (백업/불러오기 버튼 전용) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <style>
@@ -142,9 +142,11 @@
         <h1>🏛️ 언론사 포럼 관리 시스템 <span class="sync-status" id="syncStatus">🟢 실시간 동기화 연결 중...</span></h1>
       </div>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <!-- 방화벽 우회용 비상 복사/반영 버튼 최우선 배치 -->
-        <button class="btn btn-export" onclick="exportCurrentData()" title="현재 PC 브라우저에 저장된 데이터를 복사합니다."><i class="fa-solid fa-copy"></i> 📤 PC데이터 복사</button>
-        <button class="btn btn-import" onclick="importDataToCloud()" title="복사한 데이터를 모바일망을 통해 클라우드에 올립니다."><i class="fa-solid fa-file-import"></i> 📥 모바일로 반영</button>
+        <!-- 파일 방식 원터치 백업/불러오기 버튼 (글자 수 한계 해결) -->
+        <button class="btn btn-export" onclick="exportDataToFile()" title="현재 데이터를 파일로 백업받습니다."><i class="fa-solid fa-file-arrow-down"></i> 📤 백업 파일 다운로드</button>
+        <button class="btn btn-import" onclick="triggerFileInput()" title="백업된 파일을 불러와 서버에 저장합니다."><i class="fa-solid fa-file-arrow-up"></i> 📥 백업 파일 불러오기</button>
+        <input type="file" id="backupFileInput" style="display: none;" onchange="importDataFromFile(event)">
+        
         <button class="btn btn-telegram" onclick="copyTelegramSchedule()">✈️ 텔레그램 일정 복사</button>
         <button class="btn btn-team" onclick="openTeamModal()">👥 팀원 변경</button>
       </div>
@@ -224,7 +226,7 @@
 
     <!-- 가장 안전한 최하단 리스크 안전지대 (초기화 버튼 및 빌드 표기) -->
     <div class="footer-safety-zone">
-      <span>시스템 빌드 v3.2.0 (보안 방화벽 우회 및 하이브리드 안정 패치 완료)</span>
+      <span>시스템 빌드 v3.3.0 (버그 방지 파일형 백업 시스템 전면 개편 완료)</span>
       <span>•</span>
       <button class="btn-reset-lowkey" onclick="resetData()">⚠ 시스템 원본 리셋하기</button>
     </div>
@@ -342,7 +344,6 @@
       const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
       db = firebase.firestore(app);
       
-      // 사내망 프록시 우회 및 중복 설정 경고 방지
       db.settings({
         experimentalForceLongPolling: true,
         merge: true
@@ -398,7 +399,7 @@
     let targetEditingForumId = null;
 
     // -----------------------------------------------------------
-    // [보강 완료] 3. Firebase 실시간 동기화 (안전장치 포함 전체 교체)
+    // 3. Firebase 실시간 동기화
     // -----------------------------------------------------------
     function initFirebaseSync() {
       if (!db) {
@@ -407,7 +408,6 @@
         return;
       }
 
-      // Firestore 실시간 리스너 (일시적 지연 시 덮어쓰기 방지)
       db.collection("forumApp").doc("globalData").onSnapshot((doc) => {
         if (doc.exists) {
           const data = doc.data();
@@ -479,10 +479,9 @@
       }
     }
 
+    // [버그 제로] 파일 방식 원터치 데이터 내보내기/가져오기 기능
     // -----------------------------------------------------------
-    // [비상 동기화 기능] 방화벽 우회용 클립보드 복사 및 강제 붙여넣기 
-    // -----------------------------------------------------------
-    function exportCurrentData() {
+    function exportDataToFile() {
       const currentPayload = {
         teamMembers: teamMembers,
         forums: forums,
@@ -490,36 +489,50 @@
       };
       
       const textData = JSON.stringify(currentPayload);
+      const blob = new Blob([textData], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
       
-      navigator.clipboard.writeText(textData).then(() => {
-        alert("✅ 현재 PC 브라우저상 최신 데이터가 클립보드에 무사히 복사되었습니다!\n\n카카오톡 '나에게 보내기' 등에 그대로 붙여넣기(Ctrl+V)하여 모바일로 보내주세요.");
-      }).catch(() => {
-        // 복사 실패 브라우저 대응
-        prompt("아래 데이터 텍스트를 마우스 드래그로 전체 복사(Ctrl+A -> Ctrl+C)하여 모바일로 보내세요:", textData);
-      });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `forum_backup_${new Date().toISOString().substring(0,10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      alert("💾 백업 파일 다운로드 완료!\nPC [다운로드] 폴더의 백업 파일을 카카오톡 등으로 전송하세요.");
     }
 
-    function importDataToCloud() {
-      const inputData = prompt("PC에서 카카오톡 등으로 안전 전송받은 데이터 원본 텍스트를 아래 입력창에 고스란히 붙여넣어 주세요:");
-      if (!inputData) return;
+    function triggerFileInput() {
+      document.getElementById('backupFileInput').click();
+    }
 
-      try {
-        const parsed = JSON.parse(inputData.trim());
-        if (parsed.teamMembers && parsed.forums) {
-          teamMembers = parsed.teamMembers;
-          forums = parsed.forums;
-          ensureAttendeeStatus();
-          renderAll();
-          
-          // 방화벽 제약이 없는 단말 환경에서 실질 강제 업로드
-          saveData();
-          alert("🎉 성공: 모바일 전송 채널을 통해 구글 클라우드 DB 연동 완료!\n이제 PC를 포함한 모든 연동 장치에서 이 데이터가 일정하게 반영됩니다.");
-        } else {
-          alert("올바르지 않은 데이터 형식입니다. 복사한 텍스트를 정확하게 입력했는지 확인해 주세요.");
+    function importDataFromFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const rawText = e.target.result;
+          const parsed = JSON.parse(rawText.trim());
+          if (parsed.teamMembers && parsed.forums) {
+            teamMembers = parsed.teamMembers;
+            forums = parsed.forums;
+            ensureAttendeeStatus();
+            renderAll();
+            
+            saveData(); // 모바일 단말기에서 Firebase 클라우드 DB에 전송
+            alert("🎉 성공: 백업 파일로부터 서버 데이터가 안전하게 100% 복구되었습니다!");
+          } else {
+            alert("올바르지 않은 백업 파일 형식입니다.");
+          }
+        } catch (err) {
+          alert("파일 읽기 에러: " + err.message);
         }
-      } catch (e) {
-        alert("데이터 인식 중 분석 에러가 발생했습니다: " + e.message);
-      }
+      };
+      reader.readAsText(file);
+      event.target.value = ''; // 파일 투입 리셋
     }
 
     // -----------------------------------------------------------
@@ -722,28 +735,19 @@
       const prevStatus = target.attendeeStatus[attendeeName] || 'pending';
       if (prevStatus === newStatus) return;
 
-      function getDelta(s) { return s === 'attended' ? 1 : s === 'volunteer' ? 2 : s === 'absent' ? -1 : 0; }
-      const pointDiff = getDelta(newStatus) - getDelta(prevStatus);
-
       const m = teamMembers.find(member => member.name === attendeeName);
       if (m && m.name !== '영상셀') {
-        let pts = Number(m.points) || 0;
-        let attCnt = Number(m.attendCount) || 0;
-        let volCnt = Number(m.volunteerCount) || 0;
-        let absCnt = Number(m.absentCount) || 0;
+        const pointDiff = (newStatus === 'attended' ? 1 : newStatus === 'volunteer' ? 2 : newStatus === 'absent' ? -1 : 0) -
+                          (prevStatus === 'attended' ? 1 : prevStatus === 'volunteer' ? 2 : prevStatus === 'absent' ? -1 : 0);
+        m.points = Math.max(0, (Number(m.points) || 0) + pointDiff);
+        
+        if (prevStatus === 'attended') m.attendCount = Math.max(0, (m.attendCount || 0) - 1);
+        if (prevStatus === 'volunteer') { m.attendCount = Math.max(0, (m.attendCount || 0) - 1); m.volunteerCount = Math.max(0, (m.volunteerCount || 0) - 1); }
+        if (prevStatus === 'absent') m.absentCount = Math.max(0, (m.absentCount || 0) - 1);
 
-        if (prevStatus === 'attended') attCnt--;
-        if (prevStatus === 'volunteer') { attCnt--; volCnt--; }
-        if (prevStatus === 'absent') absCnt--;
-
-        if (newStatus === 'attended') attCnt++;
-        if (newStatus === 'volunteer') { attCnt++; volCnt++; }
-        if (newStatus === 'absent') absCnt++;
-
-        m.points = Math.max(0, pts + pointDiff);
-        m.attendCount = Math.max(0, attCnt);
-        m.volunteerCount = Math.max(0, volCnt);
-        m.absentCount = Math.max(0, absCnt);
+        if (newStatus === 'attended') m.attendCount = (m.attendCount || 0) + 1;
+        if (newStatus === 'volunteer') { m.attendCount = (m.attendCount || 0) + 1; m.volunteerCount = (m.volunteerCount || 0) + 1; }
+        if (newStatus === 'absent') m.absentCount = (m.absentCount || 0) + 1;
       }
 
       target.attendeeStatus[attendeeName] = newStatus;
@@ -1033,69 +1037,6 @@
     function closeAttendeeModal() {
       document.getElementById('attendeeModal').style.display = 'none';
       editingForumId = null;
-    }
-
-    function renderModalGrid() {
-      const container = document.getElementById('memberSelectGrid');
-      const sorted = teamMembers.slice().sort((a, b) => (a.points || 0) - (b.points || 0));
-
-      container.innerHTML = sorted.map(m => {
-        const isSelected = selectedAttendeesInModal.indexOf(m.name) !== -1;
-        return `
-          <div class="member-chip ${isSelected ? 'selected' : ''}" onclick="toggleMemberSelection('${m.name}')">
-            ${m.name}
-          </div>
-        `;
-      }).join('');
-
-      document.getElementById('modalSelectedCount').innerText = selectedAttendeesInModal.length;
-    }
-
-    function toggleMemberSelection(name) {
-      const idx = selectedAttendeesInModal.indexOf(name);
-      if (idx !== -1) {
-        selectedAttendeesInModal.splice(idx, 1);
-      } else {
-        if (selectedAttendeesInModal.length >= 3) {
-          alert('⚠️ 참석자는 최대 3명까지만 선택할 수 있습니다.');
-          return;
-        }
-        selectedAttendeesInModal.push(name);
-      }
-      renderModalGrid();
-    }
-
-    function saveAttendeeSelection() {
-      if (selectedAttendeesInModal.length === 0) {
-        alert('최소 1명 이상의 참석자를 선택해주세요.');
-        return;
-      }
-
-      if (editingForumId !== null) {
-        const target = forums.find(f => f.id === editingForumId);
-        if (target) {
-          const removed = target.attendees.filter(a => selectedAttendeesInModal.indexOf(a) === -1);
-          removed.forEach(a => {
-            if (target.attendeeStatus && target.attendeeStatus[a] !== 'pending') {
-              updateAttendeeStatus(editingForumId, a, 'pending');
-            }
-          });
-
-          selectedAttendeesInModal.forEach(a => {
-            if (!target.attendeeStatus) target.attendeeStatus = {};
-            if (!target.attendeeStatus[a]) target.attendeeStatus[a] = 'pending';
-          });
-
-          target.attendees = selectedAttendeesInModal.slice();
-          saveData();
-          renderForums();
-          renderMembers();
-        }
-      } else {
-        newForumCustomAttendees = selectedAttendeesInModal.slice();
-        handleTextPreview();
-      }
-      closeAttendeeModal();
     }
 
     // -----------------------------------------------------------
